@@ -1,17 +1,24 @@
 // Drafting Studio — data model.
 //
-// Dev runs on SQLite. To deploy on Postgres, change `provider` to "postgresql"
-// and point DATABASE_URL at your connection string — the schema is written to be
-// portable: enum-like fields are Strings validated against lib/taxonomy.ts, list
-// data that must be filtered uses relations, and display-only structured data
-// uses Json (supported on both engines).
+// Runs on MySQL / MariaDB (production: Hostinger MariaDB 11.8).
+//
+// MySQL maps a plain `String` to VARCHAR(191), so any column that can hold
+// more than ~190 characters carries an explicit native type:
+//   @db.Text / @db.LongText  long copy, markdown/MDX bodies, notes, messages
+//   @db.VarChar(500)         URLs, file names, titles
+// When you add a String field that may exceed 190 chars, annotate it too or
+// inserts will fail with "value too long for column".
+//
+// Enum-like fields are Strings validated against lib/taxonomy.ts, list data
+// that must be filtered uses relations, and display-only structured data uses
+// Json.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -24,7 +31,7 @@ model User {
   name          String?
   email         String    @unique
   emailVerified DateTime?
-  image         String?
+  image         String? @db.VarChar(500)
   passwordHash  String?
   role          String    @default("CLIENT") // ADMIN | STAFF | CLIENT
   title         String? // job title (staff/client)
@@ -61,13 +68,13 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
+  scope             String? @db.VarChar(500)
+  id_token          String? @db.Text
+  session_state     String? @db.VarChar(500)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -106,13 +113,13 @@ model Company {
   id       String  @id @default(cuid())
   name     String
   slug     String  @unique
-  website  String?
+  website  String? @db.VarChar(500)
   phone    String?
-  address  String?
+  address  String? @db.VarChar(500)
   city     String?
   state    String?
-  logo     String?
-  notes    String?
+  logo     String? @db.VarChar(500)
+  notes    String? @db.Text
 
   users    User[]
   projects Project[]
@@ -131,7 +138,7 @@ model ServiceCategory {
   slug  String @unique
   name  String
   icon  String
-  blurb String?
+  blurb String? @db.Text
   order Int    @default(0)
 
   services          Service[] @relation("PrimaryCategory")
@@ -142,9 +149,9 @@ model Service {
   id        String @id @default(cuid())
   slug      String @unique
   name      String
-  shortDesc String
-  heroCopy  String
-  bodyMdx   String @default("")
+  shortDesc String @db.Text
+  heroCopy  String @db.Text
+  bodyMdx   String @default("") @db.LongText
 
   categoryId String
   category   ServiceCategory @relation("PrimaryCategory", fields: [categoryId], references: [id], onDelete: Cascade)
@@ -165,11 +172,11 @@ model Service {
 
   turnaroundDays Int     @default(5)
   startingPrice  Int?
-  priceNote      String?
+  priceNote      String? @db.Text
 
-  coverImage String?
-  seoTitle   String?
-  seoDesc    String?
+  coverImage String? @db.VarChar(500)
+  seoTitle   String? @db.VarChar(500)
+  seoDesc    String? @db.Text
   order      Int     @default(0)
   published  Boolean @default(true)
 
@@ -203,13 +210,13 @@ model Industry {
   slug      String  @unique
   name      String
   icon      String
-  shortDesc String
-  bodyMdx   String  @default("")
-  heroImage String?
+  shortDesc String @db.Text
+  bodyMdx   String  @default("") @db.LongText
+  heroImage String? @db.VarChar(500)
   painPoints Json?  // string[]
   stats      Json?  // { value, label }[]
-  seoTitle   String?
-  seoDesc    String?
+  seoTitle   String? @db.VarChar(500)
+  seoDesc    String? @db.Text
   order      Int     @default(0)
 
   projects Project[]
@@ -226,9 +233,9 @@ model Industry {
 model Project {
   id      String @id @default(cuid())
   slug    String @unique
-  title   String
-  summary String
-  bodyMdx String @default("")
+  title   String @db.VarChar(500)
+  summary String @db.Text
+  bodyMdx String @default("") @db.LongText
 
   industryId String?
   industry   Industry? @relation(fields: [industryId], references: [id], onDelete: SetNull)
@@ -241,9 +248,9 @@ model Project {
   sizeSqft  Int?
   floors    Int?
   year      Int?
-  scopeNotes String?
+  scopeNotes String? @db.Text
 
-  coverImage String?
+  coverImage String? @db.VarChar(500)
   images     ProjectImage[]
 
   // Public portfolio flags
@@ -278,8 +285,8 @@ model ProjectImage {
   id        String  @id @default(cuid())
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  url       String
-  caption   String?
+  url       String @db.VarChar(500)
+  caption   String? @db.Text
   isDrawing Boolean @default(true)
   order     Int     @default(0)
 }
@@ -289,7 +296,7 @@ model ProjectUpdate {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   stage     String
-  note      String
+  note      String @db.Text
   authorId  String?
   author    User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
@@ -301,8 +308,8 @@ model ProjectFile {
   id             String  @id @default(cuid())
   projectId      String
   project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name           String
-  url            String
+  name           String @db.VarChar(500)
+  url            String @db.VarChar(500)
   sizeBytes      Int     @default(0)
   mimeType       String?
   revision       String  @default("R0")
@@ -320,7 +327,7 @@ model ProjectMessage {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   authorId  String?
   author    User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  body      String
+  body      String @db.Text
   createdAt DateTime @default(now())
 
   @@index([projectId])
@@ -348,13 +355,13 @@ model Quote {
   industry   Industry? @relation(fields: [industryId], references: [id], onDelete: SetNull)
 
   serviceIds  Json // { slug, name }[] snapshot of requested services
-  projectType String?
+  projectType String? @db.VarChar(500)
   state       String?
   sizeSqft    Int?
   floors      Int?
   deadline    DateTime?
   budgetRange String?
-  description String?
+  description String? @db.Text
   source      String   @default("website")
 
   assignedToId String?
@@ -380,8 +387,8 @@ model QuoteFile {
   id        String @id @default(cuid())
   quoteId   String
   quote     Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  name      String
-  url       String
+  name      String @db.VarChar(500)
+  url       String @db.VarChar(500)
   sizeBytes Int    @default(0)
   mimeType  String?
   createdAt DateTime @default(now())
@@ -393,7 +400,7 @@ model QuoteNote {
   quote     Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   authorId  String?
   author    User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  body      String
+  body      String @db.Text
   createdAt DateTime @default(now())
 
   @@index([quoteId])
@@ -405,7 +412,7 @@ model QuoteMessage {
   quote     Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   authorId  String?
   author    User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  body      String
+  body      String @db.Text
   fromClient Boolean @default(false)
   createdAt DateTime @default(now())
 
@@ -419,12 +426,12 @@ model QuoteMessage {
 model Post {
   id          String  @id @default(cuid())
   slug        String  @unique
-  title       String
-  excerpt     String
-  bodyMdx     String
+  title       String @db.VarChar(500)
+  excerpt     String @db.Text
+  bodyMdx     String @db.LongText
   template    String  @default("STANDARD") // STANDARD | TECHNICAL_GUIDE | CASE_STUDY | LISTICLE | EDITORIAL
-  coverImage  String?
-  ogImage     String?
+  coverImage  String? @db.VarChar(500)
+  ogImage     String? @db.VarChar(500)
 
   authorId String?
   author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
@@ -440,8 +447,8 @@ model Post {
   featured    Boolean   @default(false)
   views       Int       @default(0)
 
-  seoTitle String?
-  seoDesc  String?
+  seoTitle String? @db.VarChar(500)
+  seoDesc  String? @db.Text
 
   meta Json? // template-specific extras: { stats, tocEnabled, gallery, ... }
 
@@ -456,7 +463,7 @@ model Category {
   id          String @id @default(cuid())
   slug        String @unique
   name        String
-  description String?
+  description String? @db.Text
   color       String @default("#0a1f44")
   order       Int    @default(0)
   posts       Post[]
@@ -478,8 +485,8 @@ model Testimonial {
   author   String
   role     String?
   company  String?
-  quote    String
-  avatar   String?
+  quote    String @db.Text
+  avatar   String? @db.VarChar(500)
   rating   Int     @default(5)
   featured Boolean @default(false)
   order    Int     @default(0)
@@ -488,8 +495,8 @@ model Testimonial {
 model ClientLogo {
   id    String  @id @default(cuid())
   name  String
-  logo  String
-  url   String?
+  logo  String @db.VarChar(500)
+  url   String? @db.VarChar(500)
   order Int     @default(0)
 }
 
@@ -497,9 +504,9 @@ model TeamMember {
   id       String  @id @default(cuid())
   name     String
   role     String
-  bio      String?
-  photo    String?
-  linkedin String?
+  bio      String? @db.Text
+  photo    String? @db.VarChar(500)
+  linkedin String? @db.VarChar(500)
   order    Int     @default(0)
 }
 
@@ -510,8 +517,8 @@ model Lead {
   email     String
   phone     String?
   company   String?
-  subject   String?
-  message   String?
+  subject   String? @db.VarChar(500)
+  message   String? @db.Text
   status    String  @default("NEW") // NEW | CONTACTED | CLOSED
   source    String  @default("website")
   createdAt DateTime @default(now())
@@ -522,9 +529,9 @@ model Lead {
 
 model MediaAsset {
   id           String  @id @default(cuid())
-  url          String
-  name         String
-  alt          String?
+  url          String @db.VarChar(500)
+  name         String @db.VarChar(500)
+  alt          String? @db.Text
   mimeType     String?
   sizeBytes    Int     @default(0)
   width        Int?
@@ -540,7 +547,7 @@ model MediaAsset {
 model SiteSetting {
   id          String @id @default("singleton")
   brand       String @default("Drafting Studio")
-  tagline     String?
+  tagline     String? @db.Text
   phones      Json? // string[]
   emails      Json? // string[]
   offices     Json? // { city, line1, region, phone }[]
@@ -557,7 +564,7 @@ model AuditLog {
   user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   action    String
   entity    String
-  entityId  String?
+  entityId  String? @db.VarChar(500)
   meta      Json?
   createdAt DateTime @default(now())
 
