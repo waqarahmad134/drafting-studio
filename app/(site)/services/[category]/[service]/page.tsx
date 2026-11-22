@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { JsonLd } from "@/components/seo/json-ld";
+import { QuickAnswer } from "@/components/seo/quick-answer";
 import { getServiceBySlug } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { absoluteUrl } from "@/lib/utils";
@@ -158,6 +159,9 @@ export default async function ServiceDetailPage({
           </Button>
         </div>
       </PageHero>
+
+      {/* Quick answer: the service short description, verbatim. */}
+      {s.shortDesc && <QuickAnswer question={`What does ${s.name} cover?`} answer={s.shortDesc} />}
 
       {/* Process */}
       <section className="border-b border-border bg-secondary/40 py-14">

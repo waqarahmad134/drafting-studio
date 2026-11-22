@@ -126,3 +126,61 @@ export function trimDescription(desc: string | null | undefined, max = 155): str
   const lastSpace = head.lastIndexOf(" ");
   return lastSpace > 60 ? head.slice(0, lastSpace) : head;
 }
+
+export type Faq = { q: string; a: string };
+
+/** FAQPage JSON-LD for a visible Q&A list. Only call with Q&As that are
+ * rendered on the page (an empty mainEntity is invalid markup). */
+export function faqPageJsonLd(faqs: Faq[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  };
+}
+
+/** Strip inline Markdown (links, bold, code) down to plain text for schema
+ * values. Also swaps em-dashes for commas (house rule: no em-dash). */
+function stripMdxInline(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`]/g, "")
+    .replace(/ — /g, ", ")
+    .replace(/—/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Extract the visible `## FAQ` section from a post's MDX body as Q&A pairs.
+ * FAQ sections are written as `**Question?**` on its own line followed by
+ * the answer paragraph(s), ending at the next `## ` heading. Returns [] when
+ * the post has no FAQ section, so callers only emit FAQPage schema where the
+ * Q&A is actually on the page. No questions are rewritten or invented.
+ */
+export function extractFaqFromMdx(bodyMdx: string): Faq[] {
+  const lines = bodyMdx.split("\n");
+  const start = lines.findIndex((l) => /^##\s+FAQ\s*$/.test(l.trim()));
+  if (start === -1) return [];
+  const faqs: Faq[] = [];
+  let current: Faq | null = null;
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (/^##\s/.test(line)) break;
+    const q = line.match(/^\*\*(.+?)\*\*$/);
+    if (q) {
+      if (current) faqs.push(current);
+      current = { q: q[1].trim(), a: "" };
+      continue;
+    }
+    if (current && line) current.a = current.a ? `${current.a} ${line}` : line;
+  }
+  if (current) faqs.push(current);
+  return faqs
+    .map((f) => ({ q: stripMdxInline(f.q), a: stripMdxInline(f.a) }))
+    .filter((f) => f.q.length > 0 && f.a.length > 0);
+}

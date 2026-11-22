@@ -30,6 +30,7 @@ import { brand } from "@/lib/theme";
 import { absoluteUrl } from "@/lib/utils";
 import { websiteJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/json-ld";
+import { QuickAnswer } from "@/components/seo/quick-answer";
 
 export const metadata: Metadata = {
   alternates: { canonical: absoluteUrl("/") },
@@ -100,6 +101,12 @@ export default async function HomePage() {
     <>
       <JsonLd data={[websiteJsonLd(), faqJsonLd]} />
       <Hero />
+
+      {/* Quick answer: the page's meta description, verbatim. */}
+      <QuickAnswer
+        question="What does Drafting Studio do?"
+        answer="MEP 2D drafting services for firms and contractors: permit-ready electrical, HVAC, plumbing and fire protection drawings, delivered in 3-7 business days."
+      />
 
       {/* Discipline strip */}
       <section className="border-b border-border bg-card">

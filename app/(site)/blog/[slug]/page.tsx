@@ -10,7 +10,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { getPostBySlug, getRelatedPosts } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { absoluteUrl } from "@/lib/utils";
-import { ORG_ID, breadcrumbJsonLd, trimDescription } from "@/lib/seo";
+import { ORG_ID, breadcrumbJsonLd, extractFaqFromMdx, faqPageJsonLd, trimDescription } from "@/lib/seo";
 import type { PostForTemplate, RelatedPost, TemplateProps } from "@/components/blog/templates/types";
 
 // 21 Nov 2026: the live Hostinger runtime 500s on every on-demand render of
@@ -140,8 +140,11 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
 
   // BreadcrumbList: the STANDARD template gets one from PageHero; the other
   // templates render their own headers, so emit it here for them.
-  const schemas =
-    post.template === "STANDARD"
+  // FAQPage only when the post body has a visible FAQ section (parsed from
+  // the `## FAQ` block in the MDX). Schema mirrors visible content only.
+  const faqs = extractFaqFromMdx(post.bodyMdx);
+  const schemas = [
+    ...(post.template === "STANDARD"
       ? [articleJsonLd]
       : [
           articleJsonLd,
@@ -151,7 +154,9 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
             { label: post.category?.name ?? "Article", href: post.category ? `/blog/category/${post.category.slug}` : "/blog" },
             { label: post.title },
           ]),
-        ];
+        ]),
+    ...(faqs.length > 0 ? [faqPageJsonLd(faqs)] : []),
+  ];
 
   return (
     <>
